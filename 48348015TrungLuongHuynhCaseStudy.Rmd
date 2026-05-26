@@ -1,0 +1,797 @@
+---
+title: "Case Study"
+author: "Trung Luong Huynh"
+date: "2025-10-16"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r}
+Motor=read.csv("CaseStudyDataset.csv")
+head(Motor)
+str(Motor)
+names(Motor)
+```
+
+*(a)*
+```{r}
+#convert chr variables to factor variables
+Motor$gender <- as.factor(Motor$gender)
+
+#See basic information of the dataset
+str(Motor)
+summary(Motor)
+colSums(is.na(Motor)) #check for null input
+```
+
+```{r}
+#Calculate standard deviation of each numeric variable
+sapply(Motor[sapply(Motor, is.numeric)], sd)
+```
+
+
+```{r}
+# Check distributions of variables using histogram
+par(mfrow = c(2, 3))
+hist(Motor$weight, main = "car weight", xlab = "weight",col = "red")
+hist(Motor$distance, main = "annually driven distance", xlab = "distance",col = "red")
+hist(Motor$age, main = "age of driver", xlab = "age",col = "red")
+hist(Motor$carage, main = "age of car", xlab = "carage",col = "red")
+hist(Motor$Counts, main = "claims count", xlab = "Counts",col = "red")
+hist(Motor$exposure, main = "volume", xlab = "exposure",col = "red")
+barplot(table(Motor$gender), main = "gender of driver", xlab = "gender",col = "red")
+```
+
+```{r}
+library(corrplot)
+
+# Select numeric columns
+Motor_numeric <- Motor[, sapply(Motor, is.numeric)]
+
+# Compute correlation matrix (handling NAs)
+corr_matrix <- cor(Motor_numeric, use = "complete.obs")
+
+# Plot correlation
+corrplot(corr_matrix, 
+         method = "color", 
+         addCoef.col = "black", 
+         number.cex = 0.8,
+         tl.cex = 0.8)
+```
+
+
+*(b)*
+
+```{r}
+#Fit GLM model
+glm.PoissonCounts<-glm(formula=Counts~(weight+distance+age+carage)^2+gender+I(weight^2)+I(distance^2)+I(age^2)+I(carage^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+We will select variables using backward selection
+```{r}
+#Drop I(carage^2)  
+glm.PoissonCounts<-glm(formula=Counts~(weight+distance+age+carage)^2+gender+I(weight^2)+I(distance^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+
+```
+
+```{r}
+#Drop I(distance^2)  
+glm.PoissonCounts<-glm(formula=Counts~(weight+distance+age+carage)^2+gender+I(weight^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Drop distance:carage  
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(weight*distance)+I(weight*age)+I(weight*carage)+I(distance*age)+I(age*carage)
+                       +I(weight^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Drop I(weight * age)      
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(weight*distance)+I(weight*carage)+I(distance*age)+I(age*carage)
+                       +I(weight^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Drop I(distance * age)     
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(weight*distance)+I(weight*carage)+I(age*carage)
+                       +I(weight^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+```{r}
+#Drop I(age * carage)    
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(weight*distance)+I(weight*carage)
+                       +I(weight^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Drop I(weight  * carage)    
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(weight*distance)
+                       +I(weight^2)+I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Drop I(weight^2)
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(weight*distance)
+                       +I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Drop I(weight * distance) 
+glm.PoissonCounts<-glm(formula=Counts~weight+distance+age+carage+gender
+                       +I(age^2),data=Motor, family=poisson(),offset=log(exposure))
+summary(glm.PoissonCounts)
+```
+
+```{r}
+benchmark <- data.frame(
+  weight = 1000,
+  distance = 10,
+  age = 27,
+  carage = 5,
+  gender = "male",
+  exposure=1
+)
+
+benchmarkCounts.glm <- predict(glm.PoissonCounts, newdata = benchmark,type="response")
+benchmarkCounts.glm
+```
+
+```{r}
+x.glm <- c(1:100)
+y.glm <- predict(glm.PoissonCounts, newdata = data.frame(
+  weight = 1000,
+  distance = 10,
+  age = x.glm,
+  carage = 5,
+  gender = "male",
+  exposure =1 
+),type="response")
+
+plot(x.glm,y.glm,main="Relationship between Counts and age under GLM",xlab="age (x3)",ylab="Expected Counts (lambda(x))")
+```
+
+*(c)*
+
+```{r}
+set.seed(10)
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+#Use the elbow method to select the optimal split is 6
+#refit the model with maxdepth=6
+set.seed(10)
+tree.PoissonCounts <- suppressWarnings(rpart(Counts ~ offset(log(exposure))+ weight+distance+age+carage+gender,
+                         data = Motor,
+                         method = "poisson",
+                         parms = list(shrink=1),
+                         control = rpart.control(xval=10,
+                        minbucket=10000,cp=0.0000001)))
+rpart.plot(tree.PoissonCounts) #plot tree
+
+
+plotcp(tree.PoissonCounts,minline=TRUE)
+```
+```{r}
+nrow(tree.PoissonCounts$frame) #print number of nodes 
+sum(tree.PoissonCounts$frame$var == "<leaf>") #print number of leaves (size of tree)
+```
+
+```{r}
+#plot CV error versus log(cp)
+plot(log(tree.PoissonCounts$cp[,1]), tree.PoissonCounts$cp[,4],
+     ylim=range(c(tree.PoissonCounts$cp[,4]-tree.PoissonCounts$cp[,5], tree.PoissonCounts$cp[,4]+tree.PoissonCounts$cp[,5])),
+     pch=19, xlab="log(cp)", ylab="CV error",
+     main=" ", xlim=rev(range(log(tree.PoissonCounts$cp[,1]))))
+
+# draw arrows but with very special "arrowheads"
+arrows(log(tree.PoissonCounts$cp[,1]), tree.PoissonCounts$cp[,4]-tree.PoissonCounts$cp[,5], log(tree.PoissonCounts$cp[,1]), 
+       tree.PoissonCounts$cp[,4]+tree.PoissonCounts$cp[,5], length=0.05, angle=90, code=3)
+```
+```{r}
+#Statistics of the tree model with different level of cp
+printcp(tree.PoissonCounts) 
+```
+
+
+```{r}
+#find index of cp corresponding to smallest CV error
+min.x <- which.min(tree.PoissonCounts$cp[,4])
+min.x
+```
+
+```{r}
+#minimum CV+stderr
+dl<-tree.PoissonCounts$cp[min.x, 4] + tree.PoissonCounts$cp[min.x,5]
+dl
+```
+
+```{r}
+#function to find optimal cp using 1 SE rule
+cp.select <- function(tree){
+  min.x <- which.min(tree$cp[, 4])
+  for(i in 1:nrow(tree$cp)){
+    if(tree$cp[i, 4] < tree$cp[min.x, 4] 
+       + tree$cp[min.x, 5]){
+      return(tree$cp[i, 1])
+    }
+  }
+}
+
+cp.optimal<-cp.select(tree.PoissonCounts)
+cp.optimal
+```
+
+```{r}
+# Prune to optimal tree
+tree.PoissonCounts.pruned <- prune(tree.PoissonCounts, cp=cp.optimal)
+rpart.plot(tree.PoissonCounts.pruned)
+tree.PoissonCounts.pruned
+```
+
+```{r}
+benchmarkCounts.tree=predict(tree.PoissonCounts.pruned,newdata = benchmark)
+benchmarkCounts.tree
+```
+
+```{r}
+x.tree <- c(1:100)
+y.tree <- exp(predict(tree.PoissonCounts.pruned, newdata = data.frame(
+  weight = 1000,
+  distance = 10,
+  age = x.tree,
+  carage = 5,
+  gender = "male",
+  exposure=1
+)))
+
+plot(x.tree,y.tree,main="Relationship between Counts and age under Poisson Regression tree",xlab="age (x3)",ylab="Expected Counts (lambda(x))")
+```
+
+*(d)*
+
+```{r}
+#create a function returning out-of-sample error
+require(gbm)
+
+set.seed(10)
+
+trainsampleindex<-sample(c(1:nrow(Motor)),0.9*nrow(Motor), replace=FALSE)
+train<-Motor[trainsampleindex,]
+test<-Motor[-trainsampleindex,]
+train$fit <- train$exposure
+test$fit <- test$exposure
+
+boost.OOSerror <- function(idepth, K, shrinkage){
+options(warn = -1) #to avoid printing warnings
+  
+set.seed(10)
+boost.PoissonCounts <- suppressWarnings(gbm(Counts~offset(log(exposure))+
+                                        weight+distance+age+carage+gender,
+                                    data=train,
+                                    distribution="poisson",n.trees=K,
+                                    shrinkage=shrinkage,interaction.depth=idepth))
+
+test$predict<-suppressWarnings(test$exposure*predict(boost.PoissonCounts,newdata=test,type="response"))
+out_sample_error<-2*(sum(log((test$Counts/test$predict)^test$Counts))-
+                              sum(test$Counts)+sum(test$predict))/nrow(test)
+out_sample_error
+}
+```
+
+```{r}
+#tune shrinkage and tree size with fixed number of iteration
+idepth_grid <- c(1,2,3)
+K_grid <- 50
+shrinkage_grid <- seq(0.1, 0.9, 0.4)
+
+# Store results
+tune_results <- expand.grid(idepth = idepth_grid,
+                            K = K_grid,
+                            shrinkage = shrinkage_grid)
+tune_results$out_sample_error <- NA
+
+# Loop over all combinations
+for(i in 1:nrow(tune_results)){
+  params <- tune_results[i, ]
+  message("Testing idepth =", params$idepth,
+      ", K =", params$K,
+      ", shrinkage =", params$shrinkage, "\n")
+  
+  tune_results$out_sample_error[i] <- boost.OOSerror(
+    idepth = params$idepth,
+    K = params$K,
+    shrinkage = params$shrinkage
+  )
+}
+
+# Find best combination
+best_row <- tune_results[which.min(tune_results$out_sample_error), ]
+best_row
+
+```
+
+```{r}
+#select the best parameter pair
+best_idepth <- best_row$idepth
+best_shrinkage <- best_row$shrinkage
+
+boost.PoissonCounts <- suppressWarnings(gbm(Counts~offset(log(exposure))+
+                                              weight+distance+age+carage+gender,
+                        data=train,
+                        distribution="poisson",n.trees=100,
+                        shrinkage=best_shrinkage,interaction.depth=best_idepth))
+
+out_sample_error<-vector()
+K=100
+for(k in 1:K){
+
+    test$fit<-suppressWarnings(test$exposure*predict(boost.PoissonCounts,newdata=test,
+                                                       n.trees=k,type="response"))
+
+    out_sample_error[k]<-2*(sum(log((test$Counts/test$fit)^test$Counts))-
+                              sum(test$Counts)+sum(test$fit))/nrow(test)
+}
+
+
+plot(seq(1:K),out_sample_error,xlab="iteration",ylab="gbm out-of-sample error")
+```
+
+```{r}
+options(warn = -1) #to avoid printing warnings
+#select K=20 by using elbow's method
+boost.PoissonCounts <- suppressWarnings(gbm(Counts~offset(log(exposure))+
+                                              weight+distance+age+carage+gender,
+                        data=Motor,
+                        distribution="poisson",n.trees=20,
+                        shrinkage=best_shrinkage,interaction.depth=best_idepth))
+summary(boost.PoissonCounts)
+```
+
+```{r}
+benchmarkCounts.boost <- exp(predict(boost.PoissonCounts, newdata=benchmark))
+benchmarkCounts.boost
+```
+
+```{r}
+options(warn = -1) #to avoid printing warnings
+x.boost <- c(1:100)
+y.boost <- exp(predict(boost.PoissonCounts, newdata = data.frame(
+  weight = 1000,
+  distance = 10,
+  age = x.boost,
+  carage = 5,
+  gender = "male",
+  exposure =1 
+)))
+
+plot(x.boost,y.boost,main="Relationship between Counts and age under Poisson Boosting machine",xlab="age (x3)",ylab="Expected Counts (lambda(x))")
+```
+
+*(e)*
+
+
+```{r}
+#create a function returning out-of-sample error
+require(gbm)
+
+set.seed(10)
+
+Motor2 <- Motor
+
+trainsampleindex<-sample(c(1:nrow(Motor2)),0.9*nrow(Motor2), replace=FALSE)
+train2<-Motor2[trainsampleindex,]
+test2<-Motor2[-trainsampleindex,]
+
+train2$fit <- predict(glm.PoissonCounts, newdata=train2,type="response")*train2$exposure
+test2$fit <- predict(glm.PoissonCounts, newdata=test2,type="response")*test2$exposure
+
+boostImprove.tuning <- function(idepth, K, shrinkage){
+options(warn = -1) #to avoid printing warnings
+boostImprove.PoissonCounts <- suppressWarnings(gbm(Counts~offset(log(fit))+
+                                        weight+distance+age+carage+gender,
+                                    data=train2,
+                                    distribution="poisson",n.trees=K,
+                                    shrinkage=shrinkage,interaction.depth=idepth))
+
+test2$predict<-suppressWarnings(test2$fit/test2$exposure*predict(boostImprove.PoissonCounts,newdata=test2,
+                                                       n.trees=K,type="response"))
+out_sample_error<-2*(sum(log((test2$Counts/test2$predict)^test2$Counts))-
+                              sum(test2$Counts)+sum(test2$predict))/nrow(test2)
+out_sample_error
+}
+```
+
+```{r}
+set.seed(10)
+
+#tune shrinkage and tree size with fixed number of iteration
+idepth_grid <- c(1,2,3)
+K_grid <- 50
+shrinkage_grid <- c(0.1,0.5,0.9)
+
+# Store results
+tune_results <- expand.grid(idepth = idepth_grid,
+                            K = K_grid,
+                            shrinkage = shrinkage_grid)
+tune_results$out_sample_error <- NA
+
+# Loop over all combinations
+for(i in 1:nrow(tune_results)){
+  params <- tune_results[i, ]
+  message("Testing idepth =", params$idepth,
+      ", K =", params$K,
+      ", shrinkage =", params$shrinkage, "\n")
+  
+  tune_results$out_sample_error[i] <- boostImprove.tuning(
+    idepth = params$idepth,
+    K = params$K,
+    shrinkage = params$shrinkage
+  )
+}
+
+# Find best combination
+best_row2 <- tune_results[which.min(tune_results$out_sample_error), ]
+best_row2
+
+```
+
+```{r}
+set.seed(10)
+#select the best parameter pair
+best_idepth2 <- best_row2$idepth
+best_shrinkage2 <- best_row2$shrinkage
+
+boostImprove.PoissonCounts <- suppressWarnings(gbm(Counts~offset(log(fit))+
+                                              weight+distance+age+carage+gender,
+                        data=train2,
+                        distribution="poisson",n.trees=100,
+                        shrinkage=best_shrinkage2,interaction.depth=best_idepth2))
+
+out_sample_error<-vector()
+K=30
+for(k in 1:K){
+
+    test2$predict<-suppressWarnings(test2$fit/test2$exposure*predict(boostImprove.PoissonCounts,newdata=test2,
+                                                       n.trees=k,type="response"))
+
+    out_sample_error[k]<-2*(sum(log((test2$Counts/test2$predict)^test2$Counts))-
+                              sum(test2$Counts)+sum(test2$predict))/nrow(test2)
+}
+
+
+plot(seq(1:K),out_sample_error,xlab="iteration",ylab="gbm out-of-sample error")
+```   
+
+```{r}
+set.seed(10)
+options(warn = -1) #to avoid printing warnings
+
+Motor2$fit <- predict(glm.PoissonCounts, newdata=Motor2,type="response")*Motor2$exposure
+#select K=7 by using elbow's method
+boostImprove.PoissonCounts <- suppressWarnings(gbm(Counts~offset(log(fit))+
+                                              weight+distance+age+carage+gender,
+                        data=Motor2,
+                        distribution="poisson",n.trees=7,
+                        shrinkage=best_shrinkage2,interaction.depth=best_idepth2))
+summary(boostImprove.PoissonCounts)
+```
+
+```{r}
+options(warn = -1) #to avoid printing warnings
+benchmark$fit <- predict(glm.PoissonCounts, 
+                         newdata = benchmark, 
+                         type = "response") * benchmark$exposure
+benchmarkCounts.boostImprove <- predict(boostImprove.PoissonCounts, n.trees = 7, newdata=benchmark,type="response")*predict(glm.PoissonCounts,newdata=benchmark,type="response")
+benchmarkCounts.boostImprove
+```
+
+```{r}
+options(warn = -1)
+
+x.boostImprove <- 1:100
+x.boostImprove.fulldata <- data.frame(
+  weight = 1000,
+  distance = 10,
+  age = x.boostImprove,
+  carage = 5,
+  gender = "male",
+  exposure = 1
+)
+
+# Add the offset term (same as during model fitting)
+x.boostImprove.fulldata$fit <- predict(glm.PoissonCounts, 
+                                       newdata = x.boostImprove.fulldata, 
+                                       type = "response") * 
+                               x.boostImprove.fulldata$exposure
+
+# Predict using GBM with the same number of trees
+y.boostImprove <- predict(boostImprove.PoissonCounts, 
+                          newdata = x.boostImprove.fulldata, 
+                          n.trees = 7, 
+                          type = "response") * 
+                  predict(glm.PoissonCounts, 
+                          newdata = x.boostImprove.fulldata, 
+                          type = "response")
+
+# Plot results
+plot(x.boostImprove, y.boostImprove,
+     main = "Counts vs Age under Improved Poisson Boosting Machine",
+     xlab = "Age (x3)",
+     ylab = "Expected Counts λ(x)")
+
+```
+
+*(f)*
+
+```{r}
+set.seed(10)
+
+#Create a temporary dataset with identical features to Motor
+Motor2 <- Motor
+
+# Make a shuffled copy of dataset
+MotorCV <- Motor2
+MotorCV$random <- runif(nrow(MotorCV))
+MotorCV <- MotorCV[order(MotorCV$random),]
+
+# Assign fold labels (K = 10)
+K <- 10
+MotorCV$CV <- rep(1:K, length = nrow(MotorCV))
+```
+
+```{r}
+#Initialize total CV error
+glm.CVerror <- 0
+
+for (k1 in 1:K) {
+  
+  # Split into training and test folds
+  Motor.train <- MotorCV[MotorCV$CV != k1, ]
+  Motor.test  <- MotorCV[MotorCV$CV == k1, ]
+  
+  # Update the model on Training fold only
+  glm.fold <-  update(glm.PoissonCounts, data = Motor.train)
+  # Predict expected counts for the test fold
+  Motor.test$fit <- predict(glm.fold, newdata = Motor.test, type = "response")
+  
+  # Compute mean squared error 
+  glm.CVerror <- glm.CVerror + mean(( Motor.test$fit-Motor.test$Counts)^2)
+}
+
+# Average over K folds
+glm.CVerror <- glm.CVerror / K
+glm.CVerror
+```
+
+
+```{r}
+# Initialize total CV error
+tree.CVerror <- 0
+
+for (k1 in 1:K) {
+  
+  # Split into training and test folds
+  Motor.train <- MotorCV[MotorCV$CV != k1, ]
+  Motor.test  <- MotorCV[MotorCV$CV == k1, ]
+  
+  # Update the model on Training fold only
+  tree.fold <- update(tree.PoissonCounts.pruned, data = Motor.train)
+  # Predict expected counts for the test fold
+  Motor.test$fit <- predict(tree.fold, newdata = Motor.test, type = "vector")
+  
+  # Compute mean squared error 
+  tree.CVerror <- tree.CVerror + mean((Motor.test$fit - Motor.test$Counts)^2)
+}
+
+# Average over K folds
+tree.CVerror <- tree.CVerror / K
+tree.CVerror
+
+```
+
+```{r}
+# Initialize total CV error
+boost.CVerror <- 0
+
+for (k1 in 1:K) {
+  
+  #Ignore Warning message
+  options(warn = -1)
+  
+  # Split into training and test folds
+  Motor.train <- MotorCV[MotorCV$CV != k1, ]
+  Motor.test  <- MotorCV[MotorCV$CV == k1, ]
+  
+  # Update the model on Training fold only
+  boost.fold <- suppressWarnings(gbm(Counts~offset(log(exposure))+
+                                              weight+distance+age+carage+gender,
+                        data=Motor.train,
+                        distribution="poisson",n.trees=20,
+                        shrinkage=best_shrinkage,interaction.depth=best_idepth))
+
+  # Predict expected counts for the test fold
+  Motor.test$predict <- predict(boost.fold, newdata = Motor.test, type = "response")
+  
+  # Compute mean squared error 
+  boost.CVerror <- boost.CVerror + mean((Motor.test$predict - Motor.test$Counts)^2)
+}
+
+# Average over K folds
+boost.CVerror <- boost.CVerror / K
+boost.CVerror
+
+```
+
+```{r}
+# Initialize total CV error
+boostImprove.CVerror <- 0
+
+for (k1 in 1:K) {
+  
+  #Ignore Warning message
+  options(warn = -1)
+  
+  # Split into training and test folds
+  Motor.train <- MotorCV[MotorCV$CV != k1, ]
+  Motor.test  <- MotorCV[MotorCV$CV == k1, ]
+  
+  Motor.train$fit <- predict(glm.PoissonCounts, newdata=Motor.train,type="response")*Motor.train$exposure
+  Motor.test$fit <- predict(glm.PoissonCounts, newdata=Motor.test,type="response")*Motor.test$exposure
+  
+  # Update the model on Training fold only
+  boostImprove.fold <- suppressWarnings(gbm(Counts~offset(log(fit))+
+                                              weight+distance+age+carage+gender,
+                        data=Motor.train,
+                        distribution="poisson",n.trees=7,
+                        shrinkage=best_shrinkage2,interaction.depth=best_idepth2))
+  
+  # Predict expected counts for the test fold
+  Motor.test$predict <- predict(boostImprove.fold, newdata = Motor.test, type = "response")* predict(glm.PoissonCounts, newdata=Motor.test,type="response")
+  
+  # Compute mean squared error 
+  boostImprove.CVerror <- boostImprove.CVerror + mean((Motor.test$predict - Motor.test$Counts)^2)
+}
+
+# Average over K folds
+boostImprove.CVerror <- boostImprove.CVerror / K
+boostImprove.CVerror
+
+```
+
+*(g)*
+
+```{r}
+# Add categorial variable High to the dataset
+Motor$High <- ifelse(Motor$Counts>=2,"Yes","No")
+Motor$High <- as.factor(Motor$High)
+head(Motor)
+```
+
+```{r}
+logistic.High <- glm(High ~ (weight + distance + age + carage)^2 +
+                      gender + I(weight^2) + I(distance^2) + 
+                      I(age^2) + I(carage^2),
+                    data = Motor,
+                    family = binomial())
+
+summary(logistic.High)
+```
+
+```{r}
+#Drop I(distance^2)  
+logistic.fit<-glm(formula=High~(weight+distance+age+carage)^2+gender+I(weight^2) + I(age^2) + I(carage^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+
+```{r}
+#Drop age:carage 
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                       +I(weight*distance)+I(weight*age)+I(weight*carage)+I(distance*age)+I(distance*carage)
+                       +I(weight^2) + I(age^2) + I(carage^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Drop I(carage^2) 
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                       +I(weight*distance)+I(weight*age)+I(weight*carage)+I(distance*age)+I(distance*carage)
+                       +I(weight^2) + I(age^2) ,data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Drop I(weight * distance)
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                       +I(weight*age)+I(weight*carage)+I(distance*age)+I(distance*carage)
+                       +I(weight^2)+I(age^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Drop I(weight * age)
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                       +I(weight*carage)+I(distance*age)+I(distance*carage)
+                       +I(weight^2)+I(age^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Drop I(distance * carage)
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                       +I(weight*carage)+I(distance*age)
+                       +I(weight^2)+I(age^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Drop I(weight * carage) 
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                       +I(distance * age) 
+                       +I(weight^2)+I(age^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Drop I(weight^2)
+logistic.fit<-glm(formula=High~weight+distance+age+carage+gender
+                  +I(distance * age) 
+                  +I(age^2),data=Motor, family=binomial())
+summary(logistic.fit)
+```
+
+```{r}
+#Probability of High= Yes under best model in part g)
+benchmarkHight.g <- predict(logistic.fit, newdata = benchmark,type="response")
+benchmarkHight.g
+```
+
+```{r}
+summary(glm.PoissonCounts)
+```
+
+```{r}
+#Fit the best model in section b) using logistic regression
+logistic.fitB<-glm(formula=High~weight+distance+age+carage+gender
+                  +I(age^2),data=Motor, family=binomial())
+summary(logistic.fitB)
+```
+```{r}
+#Probability of High= Yes under best model in part b)
+benchmarkHight.b <- predict(logistic.fitB, newdata = benchmark,type="response")
+benchmarkHight.b
+```
+
+
+```{r}
+x.logistic <- c(1:100)
+y.logistic <- predict(logistic.fit, newdata = data.frame(
+  weight = 1000,
+  distance = 10,
+  age = x.logistic,
+  carage = 5,
+  gender = "male"
+),type="response")
+
+plot(x.logistic,y.logistic,main="Relationship of having claim number larger than 2 versus Age(x3) ",xlab="age (x3)",ylab="Pr[High = Yes]")
+```
+
+
+
